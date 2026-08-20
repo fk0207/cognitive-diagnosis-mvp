@@ -1,8 +1,15 @@
 # 智能化认知诊断系统 MVP — 设计文档
 
 - 日期：2026-08-20
-- 状态：已批准（待实现）
+- 状态：已批准并实现
 - 项目路径：`E:\cognitive-diagnosis-mvp`
+
+> **SDD 阶段修订（2026-08-20）**：进入 SDD（Schema-Driven）阶段后，对本文档做如下简化定稿：
+> 1. 数据表由 `items` + `item_params` 简化为 `questions` 表 + 固定 slip/guess（`config.py`），移除 `item_params` 表。
+> 2. API 路径由 `GET /api/students/{id}/mastery`、`GET /api/students/{id}/suggestion` 调整为 `GET /api/diagnosis/{id}`、`POST /api/suggest`。
+> 3. 知识图谱边字段由 `from/to/type` 统一为 `from_kp_id/to_kp_id/edge_type`。
+>
+> 正文已按最终实现同步更新。
 
 ## 1. 背景与目标
 
@@ -46,7 +53,9 @@ E:\cognitive-diagnosis-mvp\
 ├── tests/
 │   ├── test_dina.py
 │   ├── test_simulator.py
-│   └── test_api.py
+│   ├── test_api.py
+│   ├── test_e2e.py
+│   └── test_llm.py
 ├── data/
 │   └── diagnosis.db     # 生成的 SQLite（gitignore）
 ├── docs/superpowers/specs/
@@ -76,7 +85,7 @@ E:\cognitive-diagnosis-mvp\
 - 失误率（slip）：`s_j = P(答错 | 本应答对)`，默认 `0.1`
 - 猜测率（guess）：`g_j = P(答对 | 本应不会)`，默认 `0.2`
 
-MVP 不估计 s/g，二者为可配置常量（可在 `config.py` 与 `item_params` 表中按题微调）。
+MVP 不估计 s/g，二者为可配置常量（`config.py` 中全局可配，可通过环境变量覆盖）。
 
 ### 4.4 作答似然
 
@@ -104,11 +113,10 @@ MVP 不估计 s/g，二者为可配置常量（可在 `config.py` 与 `item_para
 | 表 | 字段 | 说明 |
 |---|---|---|
 | `knowledge_points` | id INTEGER PK, name TEXT | 5 行 |
-| `items` | id INTEGER PK, name TEXT | 20 行 |
-| `q_matrix` | item_id, kp_id | 题目-知识点关联（每道题考 1~3 个点） |
+| `questions` | id INTEGER PK, name TEXT | 20 行 |
+| `q_matrix` | question_id, kp_id | 题目-知识点关联（每道题考 1~3 个点） |
 | `students` | id INTEGER PK, name TEXT | 10 行 |
-| `responses` | student_id, item_id, correct INTEGER | 200 行，即 X 矩阵 |
-| `item_params` | item_id, slip REAL, guess REAL | 20 行，固定 s/g |
+| `responses` | student_id, question_id, correct INTEGER | 200 行，即 X 矩阵 |
 | `kg_edges` | from_kp_id, to_kp_id, edge_type TEXT | 知识图谱边（见下） |
 
 ### 5.1 知识图谱表 `kg_edges`
@@ -131,13 +139,13 @@ MVP 不估计 s/g，二者为可配置常量（可在 `config.py` 与 `item_para
 |---|---|---|
 | GET | `/` | 返回 `static/index.html` |
 | GET | `/api/students` | 学生列表 |
-| GET | `/api/students/{id}/mastery` | 跑 DINA，返回该生 5 个知识点掌握概率 |
-| GET | `/api/students/{id}/suggestion` | 生成学习建议（模板 / DeepSeek） |
+| GET | `/api/diagnosis/{student_id}` | 跑 DINA，返回该生 5 个知识点掌握概率 |
+| POST | `/api/suggest` | 生成学习建议（模板 / DeepSeek） |
 | GET | `/api/knowledge-graph` | 返回知识点（节点）与前置/后续关系（边） |
 
 ### 6.1 响应示例
 
-`GET /api/students/3/mastery`：
+`GET /api/diagnosis/3`：
 
 ```json
 {
@@ -164,10 +172,10 @@ MVP 不估计 s/g，二者为可配置常量（可在 `config.py` 与 `item_para
     {"id": 5, "name": "分数混合运算"}
   ],
   "edges": [
-    {"from": 1, "to": 2, "type": "prerequisite"},
-    {"from": 2, "to": 3, "type": "prerequisite"},
-    {"from": 3, "to": 4, "type": "prerequisite"},
-    {"from": 4, "to": 5, "type": "prerequisite"}
+    {"from_kp_id": 1, "to_kp_id": 2, "edge_type": "prerequisite"},
+    {"from_kp_id": 2, "to_kp_id": 3, "edge_type": "prerequisite"},
+    {"from_kp_id": 3, "to_kp_id": 4, "edge_type": "prerequisite"},
+    {"from_kp_id": 4, "to_kp_id": 5, "edge_type": "prerequisite"}
   ]
 }
 ```
@@ -181,7 +189,7 @@ MVP 不估计 s/g，二者为可配置常量（可在 `config.py` 与 `item_para
 1. **学生选择器**：下拉框列出 10 个学生 ID。
 2. **掌握概率雷达图**：5 个轴 = 知识点，0~1 刻度 = 掌握概率，选择学生后自动刷新。
 3. **知识图谱**：调用 `/api/knowledge-graph`，用简单的 SVG/列表展示知识点前置链（`KP1 → KP2 → …`）。
-4. **学习建议**：按钮「生成学习建议」，调 `/api/students/{id}/suggestion`，展示文本。
+4. **学习建议**：按钮「生成学习建议」，POST `/api/suggest`，展示文本。
 
 ## 8. LLM 学习建议（DeepSeek）
 
@@ -226,7 +234,7 @@ MVP 不估计 s/g，二者为可配置常量（可在 `config.py` 与 `item_para
   - 知识图谱边正确（5 个知识点，线性前置链）
 - `test_api.py`（FastAPI TestClient）：
   - `/api/students` 返回 200 + 学生列表
-  - `/api/students/{id}/mastery` 返回 5 个知识点概率，概率 ∈ [0,1]
+  - `/api/diagnosis/{id}` 返回 5 个知识点概率，概率 ∈ [0,1]
   - `/api/knowledge-graph` 返回节点 + 边结构正确
   - 不存在的学生 ID 返回 404
 
@@ -237,7 +245,6 @@ fastapi
 uvicorn
 numpy
 requests
-python-dotenv
 pytest
 httpx          # TestClient 依赖
 ```

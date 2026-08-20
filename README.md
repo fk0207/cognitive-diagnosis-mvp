@@ -37,6 +37,20 @@ Python 3.9+（推荐 3.11） · FastAPI · SQLite · numpy · Chart.js · DeepSe
 └── .env.example
 ```
 
+## 系统架构
+
+```mermaid
+flowchart LR
+    A["scripts/seed.py 模拟数据"] --> B[("SQLite 数据库")]
+    B --> C["app/db.py 数据访问层"]
+    C --> D["app/dina.py DINA 算法"]
+    C --> E["app/main.py FastAPI 路由"]
+    D --> E
+    E --> F["static/index.html 前端"]
+    E --> G["app/llm.py DeepSeek 建议"]
+    G --> E
+```
+
 ## 快速开始
 
 ### 1. 环境要求
