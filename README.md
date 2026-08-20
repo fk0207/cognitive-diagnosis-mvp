@@ -75,6 +75,8 @@ python -m uvicorn app.main:app --reload
 | `DINA_SLIP` | `0.1` | 失误率（本应答对却答错） |
 | `DINA_GUESS` | `0.2` | 猜测率（本应不会却答对） |
 | `DEEPSEEK_API_KEY` | 空 | DeepSeek API Key；留空则学习建议走模板降级 |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek 接口地址 |
+| `DEEPSEEK_MODEL` | `deepseek-chat` | DeepSeek 模型名 |
 
 Windows（PowerShell）示例：
 
