@@ -18,7 +18,7 @@ os.environ["DIAGNOSIS_DB"] = str(_TMP_DB)
 @pytest.fixture(scope="session", autouse=True)
 def seed_test_database() -> None:
     """会话开始时，向临时数据库写入模拟数据。"""
-    from app import seed
+    from scripts.seed import seed_database
     from app.config import DB_PATH
 
-    assert seed.seed_database(DB_PATH), "测试数据库种子失败"
+    assert seed_database(DB_PATH), "测试数据库种子失败"
