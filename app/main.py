@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import db, dina, schemas
@@ -9,8 +10,14 @@ from app.config import GUESS, SLIP
 
 app = FastAPI(title="认知诊断系统 MVP", version="0.1.0")
 
-# 静态文件目录（如果存在）
-# app.mount("/static", StaticFiles(directory="static"), name="static")
+# 静态文件目录（前端页面与静态资源）
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/")
+def index():
+    """返回首页。"""
+    return FileResponse("static/index.html")
 
 
 @app.get("/api/students", response_model=list[schemas.Student], tags=["students"])

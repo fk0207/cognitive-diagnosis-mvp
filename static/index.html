@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能化认知诊断系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; color: white; }
+        .header h1 { font-size: 32px; font-weight: 600; }
+        .header p { margin-top: 8px; opacity: 0.9; }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+        .card h2 {
+            color: #2c3e50;
+            margin-bottom: 16px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        select, button {
+            padding: 10px 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        select { flex: 1; min-width: 150px; background: #f8f9fa; }
+        select:hover { border-color: #667eea; }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.5); }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; box-shadow: none; }
+        .chart-container { position: relative; height: 400px; }
+        .graph-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 30px 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .kg-node {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 14px;
+            box-shadow: 0 4px 15px rgba(102,126,234,0.3);
+        }
+        .kg-arrow { color: #95a5a6; font-size: 24px; font-weight: bold; }
+        .suggestion {
+            background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+            border-left: 4px solid #ffc107;
+            padding: 20px;
+            border-radius: 10px;
+            line-height: 1.8;
+            color: #856404;
+        }
+        .suggestion:empty { display: none; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 智能化认知诊断系统</h1>
+            <p>基于 DINA 模型的学生知识掌握概率评估</p>
+        </div>
+
+        <div class="card">
+            <h2>👨‍🎓 学生选择</h2>
+            <div class="controls">
+                <select id="studentSelect">
+                    <option value="">加载中...</option>
+                </select>
+                <button id="diagnoseBtn" onclick="runDiagnosis()" disabled>🔍 生成诊断</button>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card" id="radarCard" style="display:none;">
+                <h2>🎯 知识掌握雷达图</h2>
+                <div class="chart-container">
+                    <canvas id="radarChart"></canvas>
+                </div>
+            </div>
+            <div class="card" id="graphCard" style="display:none;">
+                <h2>🕸️ 知识图谱（前置关系）</h2>
+                <div class="graph-container" id="knowledgeGraph"></div>
+            </div>
+        </div>
+
+        <div class="card" id="suggestCard" style="display:none;">
+            <h2>💡 学习建议</h2>
+            <div class="controls" style="margin-bottom:16px;">
+                <button onclick="generateSuggestion()">✨ 生成学习建议</button>
+            </div>
+            <div class="suggestion" id="suggestionText"></div>
+        </div>
+    </div>
+
+    <script>
+        let radarChart = null;
+        let currentMastery = null;
+
+        async function init() {
+            try {
+                const [studentsRes, graphRes] = await Promise.all([
+                    fetch('/api/students'),
+                    fetch('/api/knowledge-graph')
+                ]);
+                const students = await studentsRes.json();
+                const graph = await graphRes.json();
+
+                const select = document.getElementById('studentSelect');
+                select.innerHTML = students.map(s =>
+                    `<option value="${s.id}">${s.name}</option>`
+                ).join('');
+                document.getElementById('diagnoseBtn').disabled = false;
+
+                renderKnowledgeGraph(graph);
+                document.getElementById('graphCard').style.display = 'block';
+            } catch (err) {
+                console.error('初始化失败:', err);
+                document.getElementById('studentSelect').innerHTML =
+                    '<option value="">请先运行 python scripts/seed.py 初始化数据</option>';
+            }
+        }
+
+        function renderKnowledgeGraph(graph) {
+            const container = document.getElementById('knowledgeGraph');
+            const nodes = graph.nodes;
+            const edges = graph.edges;
+            const nodeMap = {};
+            nodes.forEach(n => nodeMap[n.id] = n.name);
+
+            let order = [];
+            if (edges.length > 0) {
+                const targets = new Set(edges.map(e => e.to_kp_id));
+                const starts = nodes.filter(n => !targets.has(n.id));
+                let current = starts[0]?.id;
+                while (current) {
+                    order.push(current);
+                    const nextEdge = edges.find(e => e.from_kp_id === current);
+                    current = nextEdge ? nextEdge.to_kp_id : null;
+                }
+            } else {
+                order = nodes.map(n => n.id);
+            }
+
+            let html = '';
+            order.forEach((id, i) => {
+                html += `<span class="kg-node">${nodeMap[id]}</span>`;
+                if (i < order.length - 1) {
+                    html += `<span class="kg-arrow">→</span>`;
+                }
+            });
+            container.innerHTML = html;
+        }
+
+        async function runDiagnosis() {
+            const studentId = document.getElementById('studentSelect').value;
+            if (!studentId) return;
+
+            const btn = document.getElementById('diagnoseBtn');
+            btn.disabled = true;
+            btn.textContent = '诊断中...';
+
+            try {
+                const res = await fetch(`/api/diagnosis/${studentId}`);
+                if (!res.ok) throw new Error('诊断失败');
+                const data = await res.json();
+
+                currentMastery = data.mastery;
+                renderRadarChart(data.mastery);
+                document.getElementById('radarCard').style.display = 'block';
+                document.getElementById('suggestCard').style.display = 'block';
+                document.getElementById('suggestionText').textContent = '';
+            } catch (err) {
+                alert('诊断失败: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 生成诊断';
+            }
+        }
+
+        function renderRadarChart(masteryData) {
+            const ctx = document.getElementById('radarChart').getContext('2d');
+            const labels = masteryData.map(m => m.kp_name);
+            const values = masteryData.map(m => Math.round(m.probability * 100));
+
+            if (radarChart) radarChart.destroy();
+
+            radarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '掌握概率 (%)',
+                        data: values,
+                        backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(102, 126, 234, 1)',
+                        pointBorderColor: '#fff',
+                        pointRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { stepSize: 20, callback: v => v + '%' },
+                            pointLabels: { font: { size: 12, weight: '500' }, color: '#2c3e50' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `掌握概率: ${ctx.raw}%`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function generateSuggestion() {
+            if (!currentMastery) { alert('请先生成诊断'); return; }
+            const studentId = document.getElementById('studentSelect').value;
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '生成中...';
+
+            try {
+                const res = await fetch('/api/suggest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_id: parseInt(studentId),
+                        mastery: currentMastery
+                    })
+                });
+                if (!res.ok) throw new Error('生成建议失败');
+                const data = await res.json();
+                document.getElementById('suggestionText').textContent = data.suggestion;
+            } catch (err) {
+                alert('生成建议失败: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✨ 生成学习建议';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
