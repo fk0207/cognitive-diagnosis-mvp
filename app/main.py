@@ -61,15 +61,13 @@ def get_diagnosis(student_id: int) -> schemas.DiagnosisResult:
 
 @app.post("/api/suggest", response_model=schemas.SuggestResponse, tags=["suggest"])
 def suggest(request: schemas.SuggestRequest) -> schemas.SuggestResponse:
-    """根据诊断结果生成学习建议（模板降级，LLM 稍后接入）。"""
-    # 简单模板建议（LLM 稍后实现）
-    weak_points = [m for m in request.mastery if m.probability < 0.4]
-    if weak_points:
-        names = "、".join(m.kp_name for m in weak_points)
-        suggestion = f"你在「{names}」上掌握度较低，建议加强相关知识点的学习。"
-    else:
-        suggestion = "恭喜你已掌握所有知识点，可以挑战更高难度的题目！"
-
+    """根据诊断结果生成学习建议（LLM + 模板降级）。"""
+    from app import llm
+    mastery_list = [
+        {"kp_id": m.kp_id, "kp_name": m.kp_name, "probability": m.probability}
+        for m in request.mastery
+    ]
+    suggestion = llm.generate_suggestion(request.student_id, mastery_list)
     return schemas.SuggestResponse(
         student_id=request.student_id,
         suggestion=suggestion
