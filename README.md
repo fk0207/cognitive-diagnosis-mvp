@@ -31,7 +31,7 @@ Python 3.9+（推荐 3.11） · FastAPI · SQLite · numpy · Chart.js · DeepSe
 │   └── seed.py         # 种子脚本（生成并写入模拟数据）
 ├── static/
 │   └── index.html      # 前端页面
-├── tests/              # 测试（53 个用例）
+├── tests/              # 测试（60 个用例）
 ├── docs/               # PRD、ER 图、API 契约、设计文档
 ├── requirements.txt
 └── .env.example
@@ -133,7 +133,7 @@ DINA 是一种认知诊断模型，采用「合取」假设：题目 j 的理想
 pytest tests/ -v
 ```
 
-53 个测试覆盖：DINA 算法、API 接口、数据模拟器、端到端流程。测试通过环境变量 `DIAGNOSIS_DB` 指向临时数据库，自包含、不污染本地数据。
+60 个测试覆盖：DINA 算法、API 接口、数据模拟器、端到端流程。测试通过环境变量 `DIAGNOSIS_DB` 指向临时数据库，自包含、不污染本地数据。
 
 ## 文档
 
